@@ -61,6 +61,82 @@ def get_supabase() -> Client | None:
     return create_client(url, key)
 
 
+def sync_products_from_excel_to_supabase(df: pd.DataFrame) -> None:
+    """Synchroniseer producten uit de geüploade Excel naar Supabase tabel 'products'."""
+    client = get_supabase()
+    if client is None:
+        st.warning("Supabase niet geconfigureerd; producten worden niet gesynchroniseerd.")
+        return
+
+    cols_lower = {str(c).strip().lower(): c for c in df.columns}
+
+    required = ["product id", "categorie", "artikel"]
+    missing = [c for c in required if c not in cols_lower]
+    if missing:
+        st.error(
+            "De volgende kolommen ontbreken in je Excel: "
+            + ", ".join(f"`{m}`" for m in missing)
+        )
+        return
+
+    product_id_col = cols_lower["product id"]
+    category_col = cols_lower["categorie"]
+    article_col = cols_lower["artikel"]
+    url_col = cols_lower.get("url")
+    cat_path_col = cols_lower.get("categorie pad codes")
+
+    payload: list[dict] = []
+    for _, row in df.iterrows():
+        raw_pid = row.get(product_id_col)
+        if pd.isna(raw_pid):
+            continue
+        pid = str(raw_pid).strip()
+        if not pid:
+            continue
+
+        item: dict[str, object] = {
+            "marketplace": "ANWB",
+            "product_id": pid,
+            "category": None,
+            "article": None,
+            "url": None,
+            "category_path_codes": None,
+        }
+
+        val = row.get(category_col)
+        if not pd.isna(val):
+            item["category"] = str(val)
+
+        val = row.get(article_col)
+        if not pd.isna(val):
+            item["article"] = str(val)
+
+        if url_col is not None:
+            val = row.get(url_col)
+            if not pd.isna(val):
+                item["url"] = str(val)
+
+        if cat_path_col is not None:
+            val = row.get(cat_path_col)
+            if not pd.isna(val):
+                item["category_path_codes"] = str(val)
+
+        payload.append(item)
+
+    if not payload:
+        st.warning("Geen geldige producten gevonden om naar Supabase te sturen.")
+        return
+
+    try:
+        client.table("products").upsert(
+            payload,
+            on_conflict="marketplace,product_id",
+        ).execute()
+        st.success(f"{len(payload)} producten gesynchroniseerd met Supabase.")
+    except Exception as exc:
+        st.error(f"Kon producten niet naar Supabase schrijven: {exc}")
+
+
 def _normalize_name(value: object) -> str:
     if value is None:
         return ""
@@ -824,6 +900,10 @@ def main() -> None:
         st.title("Upload artikelen")
         st.subheader(f"Huidig bestand: {current_file_path.name}")
         st.dataframe(df, use_container_width=True)
+
+        if st.button("Synchroniseer producten met database"):
+            sync_products_from_excel_to_supabase(df)
+
         return
 
     # Ranking overzicht

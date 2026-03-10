@@ -13,3 +13,6 @@ venv/
 # Data & logs (optioneel lokaal houden)
 data/*.csv
 data/*.xlsx
+
+# GitHub Actions lokale artefacten (indien gegenereerd)
+.github/*.log

@@ -1,0 +1,15 @@
+# Python / Streamlit project
+__pycache__/
+*.pyc
+.DS_Store
+
+# Virtual environments
+venv/
+.venv/
+
+# Streamlit secrets (NOOIT committen)
+.streamlit/secrets.toml
+
+# Data & logs (optioneel lokaal houden)
+data/*.csv
+data/*.xlsx
